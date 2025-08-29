@@ -32,9 +32,9 @@ def parse_args():
     parser.add_argument(
         'main_cfg_path', type=str, help='main config path')
     parser.add_argument(
-        '--exp_name', type=str, default='stain_1024_bs=1')
+        '--exp_name', type=str, default='stain_1024_bs=4')
     parser.add_argument(
-        '--batch_size', type=int, default=1, help='batch_size per gpu')
+        '--batch_size', type=int, default=4, help='batch_size per gpu')
     parser.add_argument(
         '--num_workers', type=int, default=4)
     parser.add_argument(

@@ -26,6 +26,7 @@ img0 = torch.from_numpy(img0_raw)[None][None].cuda() / 255.
 img1 = torch.from_numpy(img1_raw)[None][None].cuda() / 255.
 batch = {'image0': img0, 'image1': img1}
 
+
 # Inference
 with torch.no_grad():
     matcher(batch)
