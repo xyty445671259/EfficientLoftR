@@ -45,7 +45,7 @@ class MegaDepthDataset(Dataset):
         if mode == 'test' and min_overlap_score != 0:
             logger.warning("You are using `min_overlap_score`!=0 in test mode. Set to 0.")
             min_overlap_score = 0
-        self.scene_info = np.load(npz_path, allow_pickle=True)
+        self.scene_info = dict(np.load(npz_path, allow_pickle=True))
         self.pair_infos = self.scene_info['pair_infos'].copy()
 
         del self.scene_info['pair_infos']
@@ -97,6 +97,7 @@ class MegaDepthDataset(Dataset):
         K_1 = torch.tensor(self.scene_info['intrinsics'][idx1].copy(), dtype=torch.float).reshape(3, 3)
 
         # read and compute relative poses
+        #位姿矩阵代表相机在世界坐标系中的位置和方向
         T0 = self.scene_info['poses'][idx0]
         T1 = self.scene_info['poses'][idx1]
         T_0to1 = torch.tensor(np.matmul(T1, np.linalg.inv(T0)), dtype=torch.float)[:4, :4]  # (4, 4)
@@ -121,7 +122,8 @@ class MegaDepthDataset(Dataset):
             'pair_id': idx,
             'pair_names': (self.scene_info['image_paths'][idx0], self.scene_info['image_paths'][idx1]),
         }
-        # for LoFTR training
+        # for LoFTR training, (H,W)->(2,H,W)->(1,2,H,W)->float->使用最邻近插值->(2,H',W')->bool->(H',W')
+        #这里的interpolate跟补全是不一样的。它是查找特征图对应的原图，只要原图所在的感受野有一个像素为True，那么这个特征图也为True。为的是让有效区域与特征图一一对应
         if mask0 is not None:  # img_padding is True
             if self.coarse_scale:
                 [ts_mask_0, ts_mask_1] = F.interpolate(torch.stack([mask0, mask1], dim=0)[None].float(),

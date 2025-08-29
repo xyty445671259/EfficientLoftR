@@ -32,9 +32,9 @@ def parse_args():
     parser.add_argument(
         'main_cfg_path', type=str, help='main config path')
     parser.add_argument(
-        '--exp_name', type=str, default='default_exp_name')
+        '--exp_name', type=str, default='stain_1024_bs=1')
     parser.add_argument(
-        '--batch_size', type=int, default=4, help='batch_size per gpu')
+        '--batch_size', type=int, default=1, help='batch_size per gpu')
     parser.add_argument(
         '--num_workers', type=int, default=4)
     parser.add_argument(
@@ -108,6 +108,7 @@ def main():
 
     # lightning module
     profiler = build_profiler(args.profiler_name)
+    # profier是性能分析器
     model = PL_LoFTR(config, pretrained_ckpt=args.ckpt_path, profiler=profiler)
     loguru_logger.info(f"LoFTR LightningModule initialized!")
 
@@ -121,10 +122,15 @@ def main():
 
     # Callbacks
     # TODO: update ModelCheckpoint to monitor multiple metrics
-    ckpt_callback = ModelCheckpoint(monitor='auc@10', verbose=True, save_top_k=5, mode='max',
+    # ckpt_callback = ModelCheckpoint(monitor='auc@10', verbose=True, save_top_k=5, mode='max',
+    #                                 save_last=True,
+    #                                 dirpath=str(ckpt_dir),
+    #                                 filename='{epoch}-{auc@5:.3f}-{auc@10:.3f}-{auc@20:.3f}')
+    ckpt_callback = ModelCheckpoint(monitor='reproj_mean',  # 或者 'inlier_ratio_5px'
+                                    mode='min',  # 对于重投影误差，越小越好；对于内点比率，使用 'max'
+                                    save_top_k=3,
                                     save_last=True,
-                                    dirpath=str(ckpt_dir),
-                                    filename='{epoch}-{auc@5:.3f}-{auc@10:.3f}-{auc@20:.3f}')
+                                    filename='{epoch}-{reproj_mean:.4f}')
     lr_monitor = LearningRateMonitor(logging_interval='step')
     callbacks = [lr_monitor]
     if not args.disable_ckpt:

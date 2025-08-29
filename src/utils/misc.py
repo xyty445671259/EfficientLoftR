@@ -27,7 +27,9 @@ def log_on(condition, message, level):
         assert level in ['INFO', 'DEBUG', 'WARNING', 'ERROR', 'CRITICAL']
         logger.log(level, message)
 
-
+'''
+    创建一个只在rank0进程中有效记录日志, 在其他进程中静默(不记录任何内容)的日志记录器
+'''
 def get_rank_zero_only_logger(logger: _Logger):
     if rank_zero_only.rank == 0:
         return logger

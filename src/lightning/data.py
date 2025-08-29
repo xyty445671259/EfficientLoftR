@@ -25,6 +25,7 @@ from src.utils.misc import tqdm_joblib
 from src.utils import comm
 from src.datasets.megadepth import MegaDepthDataset
 from src.datasets.scannet import ScanNetDataset
+from src.datasets.stain import StainDataset
 from src.datasets.sampler import RandomConcatSampler
 
 
@@ -220,7 +221,10 @@ class MultiSceneDataModule(pl.LightningDataModule):
                             else self._build_concat_dataset
         return dataset_builder(data_root, local_npz_names, split_npz_root, intri_path,
                                 mode=mode, min_overlap_score=min_overlap_score, pose_dir=pose_dir)
-
+    '''
+        用于构建拼接数据集,用于cv中多视图立体匹配或深度估计任务:
+            根据scannet和megadepth创建多个数据集实例,并组合成一个大的拼接数据集
+    '''
     def _build_concat_dataset(
         self,
         data_root,
@@ -234,12 +238,12 @@ class MultiSceneDataModule(pl.LightningDataModule):
         datasets = []
         augment_fn = self.augment_fn if mode == 'train' else None
         data_source = self.trainval_data_source if mode in ['train', 'val'] else self.test_data_source
-        if str(data_source).lower() == 'megadepth':
-            npz_names = [f'{n}.npz' for n in npz_names]
+        if str(data_source).lower() == 'megadepth' or str(data_source).lower() == 'stain':
+            npz_names = [f'{n}.npz' for n in npz_names] #确保每个id有.npz结尾
         for npz_name in tqdm(npz_names,
                              desc=f'[rank:{self.rank}] loading {mode} datasets',
                              disable=int(self.rank) != 0):
-            # `ScanNetDataset`/`MegaDepthDataset` load all data from npz_path when initialized, which might take time.
+            # `ScanNetDataset`/`MegaDepthDataset` load all data from npz_path when initialized, which might take time. 进度条只显示进程0的
             npz_path = osp.join(npz_dir, npz_name)
             if data_source == 'ScanNet':
                 datasets.append(
@@ -256,6 +260,20 @@ class MultiSceneDataModule(pl.LightningDataModule):
             elif data_source == 'MegaDepth':
                 datasets.append(
                     MegaDepthDataset(data_root,
+                                     npz_path,
+                                     mode=mode,
+                                     min_overlap_score=min_overlap_score,
+                                     img_resize=self.mgdpt_img_resize,
+                                     df=self.mgdpt_df,
+                                     img_padding=self.mgdpt_img_pad,
+                                     depth_padding=self.mgdpt_depth_pad,
+                                     augment_fn=augment_fn,
+                                     coarse_scale=self.coarse_scale,
+                                     fp16 = self.fp16,
+                                     ))
+            elif data_source == 'Stain':
+                datasets.append(
+                    StainDataset(data_root,
                                      npz_path,
                                      mode=mode,
                                      min_overlap_score=min_overlap_score,

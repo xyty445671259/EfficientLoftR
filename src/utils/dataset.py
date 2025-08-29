@@ -60,7 +60,9 @@ def get_resized_wh(w, h, resize=None):
         w_new, h_new = w, h
     return w_new, h_new
 
-
+'''
+    确保wh能被df整除
+'''
 def get_divisible_wh(w, h, df=None):
     if df is not None:
         w_new, h_new = map(lambda x: int(x // df * df), [w, h])
@@ -68,7 +70,9 @@ def get_divisible_wh(w, h, df=None):
         w_new, h_new = w, h
     return w_new, h_new
 
-
+'''
+    将数组(图像或者特征图)填充到指定的pad_size,填充方式是在右下角添加零值
+'''
 def pad_bottom_right(inp, pad_size, ret_mask=False):
     assert isinstance(pad_size, int) and pad_size >= max(inp.shape[-2:]), f"{pad_size} < {max(inp.shape[-2:])}"
     mask = None

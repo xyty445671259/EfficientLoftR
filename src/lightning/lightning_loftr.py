@@ -10,13 +10,16 @@ import pytorch_lightning as pl
 from matplotlib import pyplot as plt
 
 from src.loftr import LoFTR
-from src.loftr.utils.supervision import compute_supervision_coarse, compute_supervision_fine
+# from src.loftr.utils.supervision import compute_supervision_coarse, compute_supervision_fine
+from src.loftr.utils.spv_ import compute_supervision_coarse, compute_supervision_fine
 from src.losses.loftr_loss import LoFTRLoss
 from src.optimizers import build_optimizer, build_scheduler
 from src.utils.metrics import (
     compute_symmetrical_epipolar_errors,
     compute_pose_errors,
-    aggregate_metrics
+    aggregate_metrics,
+    compute_reprojection_errors,
+    aggregate_metrics_
 )
 from src.utils.plotting import make_matching_figures
 from src.utils.comm import gather, all_gather
@@ -117,8 +120,9 @@ class PL_LoFTR(pl.LightningModule):
                 self.loss(batch)
     
     def _compute_metrics(self, batch):
-        compute_symmetrical_epipolar_errors(batch)  # compute epi_errs for each match
-        compute_pose_errors(batch, self.config)  # compute R_errs, t_errs, pose_errs for each pair
+        #compute_symmetrical_epipolar_errors(batch)  # compute epi_errs for each match
+        compute_reprojection_errors(batch)
+        #compute_pose_errors(batch, self.config)  # compute R_errs, t_errs, pose_errs for each pair
 
         rel_pair_names = list(zip(*batch['pair_names']))
         bs = batch['image0'].size(0)
@@ -126,9 +130,9 @@ class PL_LoFTR(pl.LightningModule):
             # to filter duplicate pairs caused by DistributedSampler
             'identifiers': ['#'.join(rel_pair_names[b]) for b in range(bs)],
             'epi_errs': [(batch['epi_errs'].reshape(-1,1))[batch['m_bids'] == b].reshape(-1).cpu().numpy() for b in range(bs)],
-            'R_errs': batch['R_errs'],
-            't_errs': batch['t_errs'],
-            'inliers': batch['inliers'],
+            # 'R_errs': batch['R_errs'],
+            # 't_errs': batch['t_errs'],
+            # 'inliers': batch['inliers'],
             'num_matches': [batch['mconf'].shape[0]], # batch size = 1 only
             }
         ret_dict = {'metrics': metrics}
@@ -145,7 +149,9 @@ class PL_LoFTR(pl.LightningModule):
 
             # figures
             if self.config.TRAINER.ENABLE_PLOTTING:
-                compute_symmetrical_epipolar_errors(batch)  # compute epi_errs for each match
+                #compute_symmetrical_epipolar_errors(batch)
+                  # compute epi_errs for each match
+                compute_reprojection_errors(batch)
                 figures = make_matching_figures(batch, self.config, self.config.TRAINER.PLOT_MODE)
                 for k, v in figures.items():
                     self.logger.experiment.add_figure(f'train_match/{k}', v, self.global_step)
@@ -177,7 +183,55 @@ class PL_LoFTR(pl.LightningModule):
             'figures': figures,
         }
         
-    def validation_epoch_end(self, outputs):
+    # def validation_epoch_end(self, outputs):
+    #     self.matcher.fine_matching.validate = False
+    #     # handle multiple validation sets
+    #     multi_outputs = [outputs] if not isinstance(outputs[0], (list, tuple)) else outputs
+    #     multi_val_metrics = defaultdict(list)
+        
+    #     for valset_idx, outputs in enumerate(multi_outputs):
+    #         # since pl performs sanity_check at the very begining of the training
+    #         cur_epoch = self.trainer.current_epoch
+    #         if not self.trainer.resume_from_checkpoint and self.trainer.running_sanity_check:
+    #             cur_epoch = -1
+
+    #         # 1. loss_scalars: dict of list, on cpu
+    #         _loss_scalars = [o['loss_scalars'] for o in outputs]
+    #         loss_scalars = {k: flattenList(all_gather([_ls[k] for _ls in _loss_scalars])) for k in _loss_scalars[0]}
+
+    #         # 2. val metrics: dict of list, numpy
+    #         _metrics = [o['metrics'] for o in outputs]
+    #         metrics = {k: flattenList(all_gather(flattenList([_me[k] for _me in _metrics]))) for k in _metrics[0]}
+    #         # NOTE: all ranks need to `aggregate_merics`, but only log at rank-0 
+    #         val_metrics_4tb = aggregate_metrics_(metrics, self.config.TRAINER.EPI_ERR_THR, config=self.config)
+    #         for thr in [5, 10, 20]:
+    #             multi_val_metrics[f'auc@{thr}'].append(val_metrics_4tb[f'auc@{thr}'])
+            
+    #         # 3. figures
+    #         _figures = [o['figures'] for o in outputs]
+    #         figures = {k: flattenList(gather(flattenList([_me[k] for _me in _figures]))) for k in _figures[0]}
+
+    #         # tensorboard records only on rank 0
+    #         if self.trainer.global_rank == 0:
+    #             for k, v in loss_scalars.items():
+    #                 mean_v = torch.stack(v).mean()
+    #                 self.logger.experiment.add_scalar(f'val_{valset_idx}/avg_{k}', mean_v, global_step=cur_epoch)
+
+    #             for k, v in val_metrics_4tb.items():
+    #                 self.logger.experiment.add_scalar(f"metrics_{valset_idx}/{k}", v, global_step=cur_epoch)
+                
+    #             for k, v in figures.items():
+    #                 if self.trainer.global_rank == 0:
+    #                     for plot_idx, fig in enumerate(v):
+    #                         self.logger.experiment.add_figure(
+    #                             f'val_match_{valset_idx}/{k}/pair-{plot_idx}', fig, cur_epoch, close=True)
+    #         plt.close('all')
+
+    #     for thr in [5, 10, 20]:
+    #         # log on all ranks for ModelCheckpoint callback to work properly
+    #         self.log(f'auc@{thr}', torch.tensor(np.mean(multi_val_metrics[f'auc@{thr}'])))  # ckpt monitors on this
+
+    def validation_epoch_end_(self, outputs):
         self.matcher.fine_matching.validate = False
         # handle multiple validation sets
         multi_outputs = [outputs] if not isinstance(outputs[0], (list, tuple)) else outputs
@@ -196,10 +250,21 @@ class PL_LoFTR(pl.LightningModule):
             # 2. val metrics: dict of list, numpy
             _metrics = [o['metrics'] for o in outputs]
             metrics = {k: flattenList(all_gather(flattenList([_me[k] for _me in _metrics]))) for k in _metrics[0]}
+            
             # NOTE: all ranks need to `aggregate_merics`, but only log at rank-0 
-            val_metrics_4tb = aggregate_metrics(metrics, self.config.TRAINER.EPI_ERR_THR, config=self.config)
-            for thr in [5, 10, 20]:
-                multi_val_metrics[f'auc@{thr}'].append(val_metrics_4tb[f'auc@{thr}'])
+            val_metrics_4tb = aggregate_metrics_(metrics, self.config.TRAINER.EPI_ERR_THR, config=self.config)
+            
+            # 不再使用 AUC 指标，而是使用重投影误差指标
+            # 收集新的指标
+            for metric_name in ['reproj_mean', 'reproj_median', 'reproj_std']:
+                if metric_name in val_metrics_4tb:
+                    multi_val_metrics[metric_name].append(val_metrics_4tb[metric_name])
+            
+            # 收集内点比率指标
+            for thr in [1, 2, 5, 10]:
+                metric_name = f'inlier_ratio_{thr}px'
+                if metric_name in val_metrics_4tb:
+                    multi_val_metrics[metric_name].append(val_metrics_4tb[metric_name])
             
             # 3. figures
             _figures = [o['figures'] for o in outputs]
@@ -221,9 +286,14 @@ class PL_LoFTR(pl.LightningModule):
                                 f'val_match_{valset_idx}/{k}/pair-{plot_idx}', fig, cur_epoch, close=True)
             plt.close('all')
 
-        for thr in [5, 10, 20]:
-            # log on all ranks for ModelCheckpoint callback to work properly
-            self.log(f'auc@{thr}', torch.tensor(np.mean(multi_val_metrics[f'auc@{thr}'])))  # ckpt monitors on this
+        # 记录新的指标用于模型检查点
+        # 选择一个主要指标用于模型检查点监控（例如重投影误差平均值）
+        if 'reproj_mean' in multi_val_metrics and multi_val_metrics['reproj_mean']:
+            self.log('reproj_mean', torch.tensor(np.mean(multi_val_metrics['reproj_mean'])))
+        
+        # 也可以记录其他重要指标
+        if 'inlier_ratio_5px' in multi_val_metrics and multi_val_metrics['inlier_ratio_5px']:
+            self.log('inlier_ratio_5px', torch.tensor(np.mean(multi_val_metrics['inlier_ratio_5px'])))
 
     def test_step(self, batch, batch_idx):
         if (self.config.LOFTR.BACKBONE_TYPE == 'RepVGG') and not self.reparameter:

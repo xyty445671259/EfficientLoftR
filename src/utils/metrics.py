@@ -70,6 +70,35 @@ def compute_symmetrical_epipolar_errors(data):
     data.update({'epi_errs': epi_errs})
 
 
+def compute_reprojection_errors(data):
+    """ 
+    基于单应性矩阵计算重投影误差
+    
+    Update:
+        data (dict):{"reproj_errs": [M]} 这里为了后续很多代码的修改，故意写成epi_errs，实际是投影误差
+    """
+    # 假设您有单应性矩阵 H_0to1
+    H_0to1 = data['M_0to1']  # [3, 3] 或 [bs, 3, 3]
+    
+    pts0 = data['mkpts0_f']  # [M, 2]
+    pts1 = data['mkpts1_f']  # [M, 2]
+    
+    # 将 pts0 转换为齐次坐标
+    ones = torch.ones(pts0.shape[0], 1, device=pts0.device)
+    pts0_homo = torch.cat([pts0, ones], dim=1)  # [M, 3]
+    
+    # 应用单应性变换
+    pts0_transformed_homo = torch.matmul(pts0_homo, H_0to1.t())  # [M, 3]
+    
+    # 转换回笛卡尔坐标
+    pts0_transformed = pts0_transformed_homo[:, :2] / pts0_transformed_homo[:, 2:3]
+    
+    # 计算重投影误差
+    reproj_errs = torch.norm(pts0_transformed - pts1, dim=1)  # [M]
+    
+    data.update({'epi_errs': reproj_errs})
+
+
 def estimate_pose(kpts0, kpts1, K0, K1, thresh, conf=0.99999):
     if len(kpts0) < 5:
         return None
@@ -262,3 +291,70 @@ def aggregate_metrics(metrics, epi_err_thr=5e-4, config=None):
     u_num_mathces = np.array(metrics['num_matches'], dtype=object)[unq_ids]
     num_matches = {f'num_matches': u_num_mathces.mean() }
     return {**aucs, **precs, **num_matches}
+
+def aggregate_metrics_(metrics, epi_err_thr=5e-4, config=None):
+    """ Aggregate metrics for the whole dataset:
+    (This method should be called once per dataset)
+    1. 重投影误差统计
+    2. 匹配精度
+    """
+    # filter duplicates
+    unq_ids = OrderedDict((iden, id) for id, iden in enumerate(metrics['identifiers']))
+    unq_ids = list(unq_ids.values())
+    logger.info(f'Aggregating metrics over {len(unq_ids)} unique items...')
+
+    # 重投影误差统计
+    if 'epi_errs' in metrics and len(metrics['epi_errs']) > 0:
+        # 获取所有重投影误差
+        epi_errors = np.concatenate([np.array(err) for err in metrics['epi_errs']])
+        
+        # 计算各种统计量
+        reproj_stats = {
+            'reproj_mean': np.mean(epi_errors),
+            'reproj_median': np.median(epi_errors),
+            'reproj_std': np.std(epi_errors),
+            'reproj_max': np.max(epi_errors),
+            'reproj_min': np.min(epi_errors),
+        }
+        
+        # 计算在不同阈值下的内点比率
+        thresholds = [1, 2, 5, 10]  # 像素阈值
+        inlier_ratios = {}
+        for thr in thresholds:
+            inlier_ratio = np.mean(epi_errors <= thr)
+            inlier_ratios[f'inlier_ratio_{thr}px'] = inlier_ratio
+    else:
+        reproj_stats = {
+            'reproj_mean': np.nan,
+            'reproj_median': np.nan,
+            'reproj_std': np.nan,
+            'reproj_max': np.nan,
+            'reproj_min': np.nan,
+        }
+        inlier_ratios = {}
+    
+    # 匹配数量统计
+    if 'num_matches' in metrics:
+        num_matches = np.array(metrics['num_matches'])[unq_ids]
+        match_stats = {
+            'num_matches_mean': np.mean(num_matches),
+            'num_matches_median': np.median(num_matches),
+            'num_matches_std': np.std(num_matches),
+            'num_matches_max': np.max(num_matches),
+            'num_matches_min': np.min(num_matches),
+        }
+    else:
+        match_stats = {}
+    
+    # 如果有其他自定义指标，也可以在这里添加
+    # 例如，如果您计算了基于单应性的内点比率
+    if 'homography_inlier_ratio' in metrics:
+        homography_stats = {
+            'homography_inlier_mean': np.mean(metrics['homography_inlier_ratio']),
+            'homography_inlier_median': np.median(metrics['homography_inlier_ratio']),
+        }
+    else:
+        homography_stats = {}
+    
+    # 合并所有统计结果
+    return {**reproj_stats, **inlier_ratios, **match_stats, **homography_stats}

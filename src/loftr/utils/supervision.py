@@ -21,12 +21,13 @@ def static_vars(**kwargs):
 
 ##############  ↓  Coarse-Level supervision  ↓  ##############
 
-
+#将二维掩码扩展为与网格点相同的形状，以便进行逐元素操作。
+#将填充区域的点坐标设置为(0,0)，这些点不会产生有意义的特征匹配，在计算损失函数的时候可以被忽略，避免对填充区域进行不必要的计算
 @torch.no_grad()
 def mask_pts_at_padded_regions(grid_pt, mask):
     """For megadepth dataset, zero-padding exists in images"""
-    mask = repeat(mask, 'n h w -> n (h w) c', c=2)
-    grid_pt[~mask.bool()] = 0
+    mask = repeat(mask, 'n h w -> n (h w) c', c=2) #(n, h, w) -> (n, h*w, 2)
+    grid_pt[~mask.bool()] = 0 #原始mask中， True表示有效区域，False表示填充区域。去反后反过来,并将填充区域的点坐标设置为(0,0)
     return grid_pt
 
 
@@ -58,12 +59,18 @@ def spvs_coarse(data, config):
 
     # 2. warp grids
     # create kpts in meshgrid and resize them to image resolution
+    #create_meshgrid 创建一个网格, 覆盖从(0,0)到(w0-1,h0-1)的所有整数坐标点。 以此可以处理特征图上每一个位置的对应关系；建立从特征图坐标到原始图像坐标的映射；为后续的匹配计算提供基础数据结构
+    #(1, w0, h0, 2) 最后一个维度包含(x,y)坐标
+    # ->(1, h0*w0, 2) 每一行代表一个特征图上的坐标点
+    # ->(N, h0*w0, 2) 将网格复制N次(批次)
+    # c为特征图, i为原图？ 原始图像坐标 = 特征图坐标*scale
     grid_pt0_c = create_meshgrid(h0, w0, False, device).reshape(1, h0*w0, 2).repeat(N, 1, 1)    # [N, hw, 2]
     grid_pt0_i = scale0 * grid_pt0_c
     grid_pt1_c = create_meshgrid(h1, w1, False, device).reshape(1, h1*w1, 2).repeat(N, 1, 1)
     grid_pt1_i = scale1 * grid_pt1_c
 
     # mask padded region to (0, 0), so no need to manually mask conf_matrix_gt
+    #因为数据集里图片尺寸不一样，所以会有pad.只有发生了padding的才需要这样
     if 'mask0' in data:
         grid_pt0_i = mask_pts_at_padded_regions(grid_pt0_i, data['mask0'])
         grid_pt1_i = mask_pts_at_padded_regions(grid_pt1_i, data['mask1'])
@@ -71,6 +78,7 @@ def spvs_coarse(data, config):
     # warp kpts bi-directionally and resize them to coarse-level resolution
     # (no depth consistency check, since it leads to worse results experimentally)
     # (unhandled edge case: points with 0-depth will be warped to the left-up corner)
+    # w_pt0_i 是图像0中的关键点对应在图像1中理论应该出现的关键点位置。另一个亦然
     _, w_pt0_i = warp_kpts(grid_pt0_i, data['depth0'], data['depth1'], data['T_0to1'], data['K0'], data['K1'])
     _, w_pt1_i = warp_kpts(grid_pt1_i, data['depth1'], data['depth0'], data['T_1to0'], data['K1'], data['K0'])
     w_pt0_c = w_pt0_i / scale1
@@ -137,7 +145,7 @@ def spvs_coarse(data, config):
 def compute_supervision_coarse(data, config):
     assert len(set(data['dataset_name'])) == 1, "Do not support mixed datasets training!"
     data_source = data['dataset_name'][0]
-    if data_source.lower() in ['scannet', 'megadepth']:
+    if data_source.lower() in ['scannet', 'megadepth', 'stain']:
         spvs_coarse(data, config)
     else:
         raise ValueError(f'Unknown data source: {data_source}')
@@ -160,7 +168,7 @@ def spvs_fine(data, config, logger = None):
             "j_ids_f_dj": [Mp]
             }
     """
-    # 1. misc
+    # 1. misc(miscellaneous，杂项或其它)
     pt1_i = data['spv_pt1_i']
     W = config['LOFTR']['FINE_WINDOW_SIZE']
     WW = W*W
