@@ -7,15 +7,15 @@ from src.loftr import LoFTR, full_default_cfg, reparameter
 # Initialize the matcher with default settings
 _default_cfg = deepcopy(full_default_cfg)
 matcher = LoFTR(config=_default_cfg)
-
+#/home/cxy/gitlab/EfficientLoftR/weights/eloftr_outdoor.ckpt
 # Load pretrained weights
-matcher.load_state_dict(torch.load("/home/cxy/medipath/learning/EfficientLoFTR/logs/tb_logs/stain_1024_bs=1/version_0/checkpoints/last.ckpt")['state_dict'])
+matcher.load_state_dict(torch.load("/home/cxy/gitlab/EfficientLoftR/weights/eloftr_outdoor.ckpt")['state_dict'])
 matcher = reparameter(matcher)  # Essential for good performance
 matcher = matcher.eval().cuda()
 
 # Load and preprocess images
-img0_raw = cv2.imread("/home/cxy/medipath/learning/EfficientLoFTR/data/stain/img/K2023-0122_HE_S0.png", cv2.IMREAD_GRAYSCALE)
-img1_raw = cv2.imread("/home/cxy/medipath/learning/EfficientLoFTR/data/stain/img/K2023-0122_PAS_S0.png", cv2.IMREAD_GRAYSCALE)
+img0_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/train/HE_PAS/K2023-0149-HE_S0.jpg", cv2.IMREAD_GRAYSCALE)
+img1_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/train/HE_PAS/K2023-0149-PAS_S0.jpg", cv2.IMREAD_GRAYSCALE)
 
 # Resize images to be divisible by 32
 img0_raw = cv2.resize(img0_raw, (img0_raw.shape[1]//32*32, img0_raw.shape[0]//32*32))
@@ -46,7 +46,7 @@ vis[:h2, w1:w1+w2] = img1_display
 
 # 绘制匹配点
 for i in range(len(mkpts0)):
-    if mconf[i] > 0.7:
+    if mconf[i] > 0.5:
         # 随机颜色，但为了更好的可视化，可以使用基于置信度的颜色
         color = np.random.randint(0, 255, 3).tolist()
         
@@ -62,7 +62,7 @@ for i in range(len(mkpts0)):
         cv2.line(vis, pt0, pt1, color, 1)
 
 # 调整图像大小以便显示（如果太大）
-max_display_size = 2048  # 最大显示尺寸
+max_display_size =1024  # 最大显示尺寸
 if vis.shape[1] > max_display_size:
     scale = max_display_size / vis.shape[1]
     new_h = int(vis.shape[0] * scale)
@@ -71,4 +71,4 @@ if vis.shape[1] > max_display_size:
 
 
 
-cv2.imwrite('1.jpg', vis)
+cv2.imwrite('/home/cxy/gitlab/EfficientLoftR/data/stain/res.jpg', vis)

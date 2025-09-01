@@ -26,8 +26,8 @@ def make_matching_figure(
     # draw image pair
     assert mkpts0.shape[0] == mkpts1.shape[0], f'mkpts0: {mkpts0.shape[0]} v.s. mkpts1: {mkpts1.shape[0]}'
     fig, axes = plt.subplots(1, 2, figsize=(10, 6), dpi=dpi)
-    axes[0].imshow(img0, cmap='gray')
-    axes[1].imshow(img1, cmap='gray')
+    # axes[0].imshow(img0, cmap='gray')
+    # axes[1].imshow(img1, cmap='gray')
     for i in range(2):   # clear all frames
         axes[i].get_yaxis().set_ticks([])
         axes[i].get_xaxis().set_ticks([])

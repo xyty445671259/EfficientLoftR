@@ -32,16 +32,16 @@ def parse_args():
     parser.add_argument(
         'main_cfg_path', type=str, help='main config path')
     parser.add_argument(
-        '--exp_name', type=str, default='stain_1024_bs=4')
+        '--exp_name', type=str, default='stain_0901_bs=1')
     parser.add_argument(
-        '--batch_size', type=int, default=4, help='batch_size per gpu')
+        '--batch_size', type=int, default=1, help='batch_size per gpu')
     parser.add_argument(
         '--num_workers', type=int, default=4)
     parser.add_argument(
         '--pin_memory', type=lambda x: bool(strtobool(x)),
         nargs='?', default=True, help='whether loading data to pinned memory or not')
     parser.add_argument(
-        '--ckpt_path', type=str, default=None,
+        '--ckpt_path', type=str, default='/home/cxy/gitlab/EfficientLoftR/weights/eloftr_outdoor.ckpt',
         help='pretrained checkpoint path, helpful for using a pre-trained coarse-only LoFTR')
     parser.add_argument(
         '--disable_ckpt', action='store_true',
