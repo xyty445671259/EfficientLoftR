@@ -14,16 +14,20 @@ matcher = reparameter(matcher)  # Essential for good performance
 matcher = matcher.eval().cuda()
 
 # Load and preprocess images
-img0_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/train/HE_PAS/K2023-0149-HE_S0.jpg", cv2.IMREAD_GRAYSCALE)
-img1_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/train/HE_PAS/K2023-0149-PAS_S0.jpg", cv2.IMREAD_GRAYSCALE)
+img0_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/HE.png", cv2.IMREAD_COLOR)
+img1_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/AR.png", cv2.IMREAD_COLOR)
 
 # Resize images to be divisible by 32
 img0_raw = cv2.resize(img0_raw, (img0_raw.shape[1]//32*32, img0_raw.shape[0]//32*32))
 img1_raw = cv2.resize(img1_raw, (img1_raw.shape[1]//32*32, img1_raw.shape[0]//32*32))
 
+# Convert to grayscale for LoFTR processing
+img0_gray = cv2.cvtColor(img0_raw, cv2.COLOR_BGR2GRAY)
+img1_gray = cv2.cvtColor(img1_raw, cv2.COLOR_BGR2GRAY)
+
 # Convert to tensors
-img0 = torch.from_numpy(img0_raw)[None][None].cuda() / 255.
-img1 = torch.from_numpy(img1_raw)[None][None].cuda() / 255.
+img0 = torch.from_numpy(img0_gray)[None][None].cuda() / 255.
+img1 = torch.from_numpy(img1_gray)[None][None].cuda() / 255.
 batch = {'image0': img0, 'image1': img1}
 
 
@@ -35,8 +39,8 @@ with torch.no_grad():
     mconf = batch['mconf'].cpu().numpy()
 
 print(f"找到 {len(mkpts0)} 个匹配点")
-img0_display = cv2.cvtColor(img0_raw, cv2.COLOR_GRAY2BGR)
-img1_display = cv2.cvtColor(img1_raw, cv2.COLOR_GRAY2BGR)
+img0_display = img0_raw.copy()  # 直接使用彩色图像
+img1_display = img1_raw.copy()  # 直接使用彩色图像
 # 创建一个水平拼接的图像用于显示匹配
 h1, w1 = img0_display.shape[:2]
 h2, w2 = img1_display.shape[:2]
@@ -46,7 +50,7 @@ vis[:h2, w1:w1+w2] = img1_display
 
 # 绘制匹配点
 for i in range(len(mkpts0)):
-    if mconf[i] > 0.5:
+    if mconf[i] > 0.3:
         # 随机颜色，但为了更好的可视化，可以使用基于置信度的颜色
         color = np.random.randint(0, 255, 3).tolist()
         

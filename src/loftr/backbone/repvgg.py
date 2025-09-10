@@ -150,7 +150,7 @@ class RepVGG(nn.Module):
 
     def __init__(self, num_blocks, num_classes=1000, width_multiplier=None, override_groups_map=None, deploy=False, use_se=False, use_checkpoint=False):
         super(RepVGG, self).__init__()
-        assert len(width_multiplier) == 4
+        assert len(width_multiplier) == 4 or len(width_multiplier) == 5
         self.deploy = deploy
         self.override_groups_map = override_groups_map or dict()
         assert 0 not in self.override_groups_map
@@ -163,7 +163,8 @@ class RepVGG(nn.Module):
         self.stage1 = self._make_stage(int(64 * width_multiplier[0]), num_blocks[0], stride=1)
         self.stage2 = self._make_stage(int(128 * width_multiplier[1]), num_blocks[1], stride=2)
         self.stage3 = self._make_stage(int(256 * width_multiplier[2]), num_blocks[2], stride=2)
-
+        self.stage4 = self._make_stage(int(256 * width_multiplier[3]), num_blocks[3], stride=2)
+        
     def _make_stage(self, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
         blocks = []
@@ -194,8 +195,8 @@ g2_map = {l: 2 for l in optional_groupwise_layers}
 g4_map = {l: 4 for l in optional_groupwise_layers}
 
 def create_RepVGG(deploy=False, use_checkpoint=False):
-    return RepVGG(num_blocks=[2, 4, 14, 1], num_classes=1000,
-                  width_multiplier=[1, 1, 1, 2.5], override_groups_map=None, deploy=deploy, use_checkpoint=use_checkpoint)
+    return RepVGG(num_blocks=[2, 4, 14, 1, 1], num_classes=1000,
+                  width_multiplier=[1, 1, 1, 1,2.5], override_groups_map=None, deploy=deploy, use_checkpoint=use_checkpoint)
 
 #   Use this for converting a RepVGG model or a bigger model with RepVGG as its component
 #   Use like this

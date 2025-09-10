@@ -18,7 +18,7 @@ cfg.LOFTR.MATCH_COARSE.TRAIN_COARSE_PERCENT = 0.3
 cfg.LOFTR.MATCH_COARSE.SPARSE_SPVS = True
 
 # model config
-cfg.LOFTR.RESOLUTION = (8, 1)
+cfg.LOFTR.RESOLUTION = (16, 1)
 cfg.LOFTR.FINE_WINDOW_SIZE = 8  # window_size in fine_level, must be even
 cfg.LOFTR.ALIGN_CORNER = False
 cfg.LOFTR.MP = True # just for reproducing paper, FP16 is much faster on modern GPUs

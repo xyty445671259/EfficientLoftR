@@ -62,7 +62,7 @@ class StainDataset(Dataset):
 
         # for training LoFTR
         self.augment_fn = augment_fn if mode == 'train' else None
-        self.coarse_scale = getattr(kwargs, 'coarse_scale', 0.125)
+        self.coarse_scale = getattr(kwargs, 'coarse_scale', 0.0625)
         
         self.fp16 = fp16
         self.image_to_annotation = {}
