@@ -23,12 +23,12 @@ matcher = reparameter(matcher)  # Essential for good performance
 matcher = matcher.eval().cuda()
 
 # Load and preprocess images
-img0_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/train/HE_PAS/K2023-1482_HE_S0.jpg", cv2.IMREAD_COLOR)
-img1_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/train/HE_PAS/K2023-1482_PAS_S0.jpg", cv2.IMREAD_COLOR)
+img0_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/train/HE_PAS/MP_H_1_1_K2023_20250327_PAS_RRB-21835_S0_S0.png", cv2.IMREAD_COLOR)
+img1_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/train/HE_PAS/MP_H_1_1_K2023_20250327_PASM_RRB-21835_S0_S0.png", cv2.IMREAD_COLOR)
 
 # Resize images to be divisible by 32
-img0_raw = resize_to_same(img0_raw, long_side)
-img1_raw = resize_to_same(img1_raw, long_side)
+img0_raw = cv2.resize(img0_raw, (img0_raw.shape[1]//64*64, img0_raw.shape[0]//64*64))
+img1_raw = cv2.resize(img1_raw, (img1_raw.shape[1]//64*64, img1_raw.shape[0]//64*64))
 
 # Convert to grayscale for LoFTR processing
 img0_gray = cv2.cvtColor(img0_raw, cv2.COLOR_BGR2GRAY)
