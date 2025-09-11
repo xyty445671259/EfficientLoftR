@@ -2,24 +2,33 @@ import torch
 import cv2
 import numpy as np
 from copy import deepcopy
-from src.loftr import LoFTR, full_default_cfg, reparameter
+from src.loftr import LoFTR, full_default_cfg, reparameter, infer_default_config
+
+long_side = 832
+def resize_to_same(img, long_side):
+    h, w = img.shape[:2]
+    scale = long_side / max(h, w)
+    new_h, new_w = int(h*scale), int(w*scale)
+    # 保证 32 对齐
+    new_h, new_w = new_h // 32 * 32, new_w // 32 * 32
+    return cv2.resize(img, (new_w, new_h))
 
 # Initialize the matcher with default settings
-_default_cfg = deepcopy(full_default_cfg)
+_default_cfg = deepcopy(infer_default_config)
 matcher = LoFTR(config=_default_cfg)
 #/home/cxy/gitlab/EfficientLoftR/weights/eloftr_outdoor.ckpt
 # Load pretrained weights
-matcher.load_state_dict(torch.load("/home/cxy/gitlab/EfficientLoftR/weights/eloftr_outdoor.ckpt")['state_dict'])
+matcher.load_state_dict(torch.load("/home/cxy/gitlab/EfficientLoftR/logs/tb_logs/stain_0901_bs=1/version_47/checkpoints/last.ckpt")['state_dict'])
 matcher = reparameter(matcher)  # Essential for good performance
 matcher = matcher.eval().cuda()
 
 # Load and preprocess images
-img0_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/HE.png", cv2.IMREAD_COLOR)
-img1_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/AR.png", cv2.IMREAD_COLOR)
+img0_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/train/HE_PAS/K2023-1482_HE_S0.jpg", cv2.IMREAD_COLOR)
+img1_raw = cv2.imread("/home/cxy/gitlab/EfficientLoftR/data/stain/train/HE_PAS/K2023-1482_PAS_S0.jpg", cv2.IMREAD_COLOR)
 
 # Resize images to be divisible by 32
-img0_raw = cv2.resize(img0_raw, (img0_raw.shape[1]//32*32, img0_raw.shape[0]//32*32))
-img1_raw = cv2.resize(img1_raw, (img1_raw.shape[1]//32*32, img1_raw.shape[0]//32*32))
+img0_raw = resize_to_same(img0_raw, long_side)
+img1_raw = resize_to_same(img1_raw, long_side)
 
 # Convert to grayscale for LoFTR processing
 img0_gray = cv2.cvtColor(img0_raw, cv2.COLOR_BGR2GRAY)

@@ -11,6 +11,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.plugins import DDPPlugin, NativeMixedPrecisionPlugin
 
+
 from src.config.default import get_cfg_defaults
 from src.utils.misc import get_rank_zero_only_logger, setup_gpus
 from src.utils.profiler import build_profiler
@@ -40,8 +41,9 @@ def parse_args():
     parser.add_argument(
         '--pin_memory', type=lambda x: bool(strtobool(x)),
         nargs='?', default=True, help='whether loading data to pinned memory or not')
+    #'/home/cxy/gitlab/EfficientLoftR/weights/eloftr_outdoor.ckpt'
     parser.add_argument(
-        '--ckpt_path', type=str, default='/home/cxy/gitlab/EfficientLoftR/weights/eloftr_outdoor.ckpt',
+        '--ckpt_path', type=str, default=None,
         help='pretrained checkpoint path, helpful for using a pre-trained coarse-only LoFTR')
     parser.add_argument(
         '--disable_ckpt', action='store_true',
@@ -139,7 +141,7 @@ def main():
     # Lightning Trainer
     trainer = pl.Trainer.from_argparse_args(
         args,
-        plugins=[DDPPlugin(find_unused_parameters=False,
+        plugins=[DDPPlugin(find_unused_parameters=True,
                           num_nodes=args.num_nodes,
                           sync_batchnorm=config.TRAINER.WORLD_SIZE > 0), NativeMixedPrecisionPlugin()],
         gradient_clip_val=config.TRAINER.GRADIENT_CLIPPING,
@@ -149,7 +151,8 @@ def main():
         replace_sampler_ddp=False,  # use custom sampler
         reload_dataloaders_every_epoch=False,  # avoid repeated samples!
         weights_summary='full',
-        profiler=profiler)
+        profiler=profiler
+        )
     loguru_logger.info(f"Trainer initialized!")
     loguru_logger.info(f"Start training!")
 

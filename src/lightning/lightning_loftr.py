@@ -111,9 +111,9 @@ class PL_LoFTR(pl.LightningModule):
             with torch.autocast(enabled=self.config.LOFTR.MP, device_type='cuda'):
                 self.matcher(batch)
         
-        with self.profiler.profile("Compute fine supervision"):
-            with torch.autocast(enabled=False, device_type='cuda'):
-                compute_supervision_fine(batch, self.config, self.logger)
+        # with self.profiler.profile("Compute fine supervision"):
+        #     with torch.autocast(enabled=False, device_type='cuda'):
+        #         compute_supervision_fine(batch, self.config, self.logger)
             
         with self.profiler.profile("Compute losses"):
             with torch.autocast(enabled=self.config.LOFTR.MP, device_type='cuda'):

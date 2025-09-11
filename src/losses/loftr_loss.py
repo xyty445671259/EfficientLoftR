@@ -156,6 +156,77 @@ class LoFTRLoss(nn.Module):
             c_weight = None
         return c_weight
 
+    # def forward(self, data):
+    #     """
+    #     Update:
+    #         data (dict): update{
+    #             'loss': [1] the reduced loss across a batch,
+    #             'loss_scalars' (dict): loss scalars for tensorboard_record
+    #         }
+    #     """
+    #     loss_scalars = {}
+    #     # 0. compute element-wise loss weight
+    #     c_weight = self.compute_c_weight(data)
+
+    #     # 1. coarse-level loss
+    #     if self.overlap_weightc:
+    #         loss_c = self.compute_coarse_loss(
+    #             data['conf_matrix_with_bin'] if self.sparse_spvs and self.match_type == 'sinkhorn' \
+    #                 else data['conf_matrix'],
+    #             data['conf_matrix_gt'],
+    #             weight=c_weight, overlap_weight=data['conf_matrix_error_gt'])
+        
+    #     else:
+    #         loss_c = self.compute_coarse_loss(
+    #             data['conf_matrix_with_bin'] if self.sparse_spvs and self.match_type == 'sinkhorn' \
+    #                 else data['conf_matrix'],
+    #             data['conf_matrix_gt'],
+    #             weight=c_weight)
+
+    #     loss = loss_c * self.loss_config['coarse_weight']
+    #     loss_scalars.update({"loss_c": loss_c.clone().detach().cpu()})
+        
+    #     # 2. pixel-level loss (first-stage refinement)
+    #     if self.overlap_weightf:
+    #         loss_f = self.compute_fine_loss(data['conf_matrix_f'], data['conf_matrix_f_gt'], data['conf_matrix_f_error_gt'])
+    #     else:
+    #         loss_f = self.compute_fine_loss(data['conf_matrix_f'], data['conf_matrix_f_gt'])
+    #     if loss_f is not None:
+    #         loss += loss_f * self.loss_config['fine_weight']
+    #         loss_scalars.update({"loss_f":  loss_f.clone().detach().cpu()})
+    #     else:
+    #         assert self.training is False
+    #         loss_scalars.update({'loss_f': torch.tensor(1.)})  # 1 is the upper bound
+
+    #     # 3. subpixel-level loss (second-stage refinement)
+    #     # we calculate subpixel-level loss for all pixel-level gt
+    #     if 'expec_f' not in data:
+    #         sim_matrix_f, m_ids, i_ids, j_ids_di, j_ids_dj = data['sim_matrix_ff'], data['m_ids_f'], data['i_ids_f'], data['j_ids_f_di'], data['j_ids_f_dj']
+    #         del data['sim_matrix_ff'], data['m_ids_f'], data['i_ids_f'], data['j_ids_f_di'], data['j_ids_f_dj']
+    #         delta = create_meshgrid(3, 3, True, sim_matrix_f.device).to(torch.long) # [1, 3, 3, 2]
+    #         m_ids = m_ids[...,None,None].expand(-1, 3, 3)
+    #         i_ids = i_ids[...,None,None].expand(-1, 3, 3)
+    #         # Note that j_ids_di & j_ids_dj in (i, j) format while delta in (x, y) format
+    #         j_ids_di = j_ids_di[...,None,None].expand(-1, 3, 3) + delta[None, ..., 1]
+    #         j_ids_dj = j_ids_dj[...,None,None].expand(-1, 3, 3) + delta[None, ..., 0]
+
+    #         sim_matrix_f = sim_matrix_f.reshape(-1, self.local_regressw*self.local_regressw, self.local_regressw+2, self.local_regressw+2) # [M, WW, W+2, W+2]
+    #         sim_matrix_f = sim_matrix_f[m_ids, i_ids, j_ids_di, j_ids_dj]
+    #         sim_matrix_f = sim_matrix_f.reshape(-1, 9)
+
+    #         sim_matrix_f = F.softmax(sim_matrix_f / self.local_regress_temperature, dim=-1)
+    #         heatmap = sim_matrix_f.reshape(-1, 3, 3)
+            
+    #         # compute coordinates from heatmap
+    #         coords_normalized = dsnt.spatial_expectation2d(heatmap[None], True)[0]
+    #         data.update({'expec_f': coords_normalized})
+    #     loss_l = self._compute_local_loss_l2(data['expec_f'], data['expec_f_gt'])
+
+    #     loss += loss_l * self.loss_config['local_weight']
+    #     loss_scalars.update({"loss_l":  loss_l.clone().detach().cpu()})
+
+    #     loss_scalars.update({'loss': loss.clone().detach().cpu()})
+    #     data.update({"loss": loss, "loss_scalars": loss_scalars})
     def forward(self, data):
         """
         Update:
@@ -168,14 +239,13 @@ class LoFTRLoss(nn.Module):
         # 0. compute element-wise loss weight
         c_weight = self.compute_c_weight(data)
 
-        # 1. coarse-level loss
+        # 1. coarse-level loss (only keep this stage)
         if self.overlap_weightc:
             loss_c = self.compute_coarse_loss(
                 data['conf_matrix_with_bin'] if self.sparse_spvs and self.match_type == 'sinkhorn' \
                     else data['conf_matrix'],
                 data['conf_matrix_gt'],
                 weight=c_weight, overlap_weight=data['conf_matrix_error_gt'])
-        
         else:
             loss_c = self.compute_coarse_loss(
                 data['conf_matrix_with_bin'] if self.sparse_spvs and self.match_type == 'sinkhorn' \
@@ -183,47 +253,10 @@ class LoFTRLoss(nn.Module):
                 data['conf_matrix_gt'],
                 weight=c_weight)
 
+        # 总 loss = coarse loss * 权重
         loss = loss_c * self.loss_config['coarse_weight']
         loss_scalars.update({"loss_c": loss_c.clone().detach().cpu()})
-        
-        # 2. pixel-level loss (first-stage refinement)
-        if self.overlap_weightf:
-            loss_f = self.compute_fine_loss(data['conf_matrix_f'], data['conf_matrix_f_gt'], data['conf_matrix_f_error_gt'])
-        else:
-            loss_f = self.compute_fine_loss(data['conf_matrix_f'], data['conf_matrix_f_gt'])
-        if loss_f is not None:
-            loss += loss_f * self.loss_config['fine_weight']
-            loss_scalars.update({"loss_f":  loss_f.clone().detach().cpu()})
-        else:
-            assert self.training is False
-            loss_scalars.update({'loss_f': torch.tensor(1.)})  # 1 is the upper bound
-
-        # 3. subpixel-level loss (second-stage refinement)
-        # we calculate subpixel-level loss for all pixel-level gt
-        if 'expec_f' not in data:
-            sim_matrix_f, m_ids, i_ids, j_ids_di, j_ids_dj = data['sim_matrix_ff'], data['m_ids_f'], data['i_ids_f'], data['j_ids_f_di'], data['j_ids_f_dj']
-            del data['sim_matrix_ff'], data['m_ids_f'], data['i_ids_f'], data['j_ids_f_di'], data['j_ids_f_dj']
-            delta = create_meshgrid(3, 3, True, sim_matrix_f.device).to(torch.long) # [1, 3, 3, 2]
-            m_ids = m_ids[...,None,None].expand(-1, 3, 3)
-            i_ids = i_ids[...,None,None].expand(-1, 3, 3)
-            # Note that j_ids_di & j_ids_dj in (i, j) format while delta in (x, y) format
-            j_ids_di = j_ids_di[...,None,None].expand(-1, 3, 3) + delta[None, ..., 1]
-            j_ids_dj = j_ids_dj[...,None,None].expand(-1, 3, 3) + delta[None, ..., 0]
-
-            sim_matrix_f = sim_matrix_f.reshape(-1, self.local_regressw*self.local_regressw, self.local_regressw+2, self.local_regressw+2) # [M, WW, W+2, W+2]
-            sim_matrix_f = sim_matrix_f[m_ids, i_ids, j_ids_di, j_ids_dj]
-            sim_matrix_f = sim_matrix_f.reshape(-1, 9)
-
-            sim_matrix_f = F.softmax(sim_matrix_f / self.local_regress_temperature, dim=-1)
-            heatmap = sim_matrix_f.reshape(-1, 3, 3)
-            
-            # compute coordinates from heatmap
-            coords_normalized = dsnt.spatial_expectation2d(heatmap[None], True)[0]
-            data.update({'expec_f': coords_normalized})
-        loss_l = self._compute_local_loss_l2(data['expec_f'], data['expec_f_gt'])
-
-        loss += loss_l * self.loss_config['local_weight']
-        loss_scalars.update({"loss_l":  loss_l.clone().detach().cpu()})
-
         loss_scalars.update({'loss': loss.clone().detach().cpu()})
+
         data.update({"loss": loss, "loss_scalars": loss_scalars})
+        return data

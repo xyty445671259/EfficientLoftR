@@ -18,7 +18,8 @@ def reparameter(matcher):
         for module in modules:
             if hasattr(module, 'switch_to_deploy'):
                 module.switch_to_deploy()
-    for modules in [matcher.fine_preprocess.layer2_outconv2, matcher.fine_preprocess.layer1_outconv2]:
+    # for modules in [matcher.fine_preprocess.layer2_outconv2, matcher.fine_preprocess.layer1_outconv2]:
+    for modules in [matcher.fine_preprocess.layer3_outconv2, matcher.fine_preprocess.layer2_outconv2]:
         for module in modules:
             if hasattr(module, 'switch_to_deploy'):
                 module.switch_to_deploy()
@@ -60,6 +61,7 @@ class LoFTR(nn.Module):
             data.update({
                 'feats_x2': ret_dict['feats_x2'],
                 'feats_x1': ret_dict['feats_x1'],
+                'feats_x3': ret_dict['feats_f']
             })
             (feat_c0, feat_c1) = feats_c.split(data['bs'])
         else:  # handle different input shapes
@@ -67,8 +69,10 @@ class LoFTR(nn.Module):
             feat_c0 = ret_dict0['feats_c']
             feat_c1 = ret_dict1['feats_c']
             data.update({
+                'feats_x3_0': ret_dict0['feats_f'],
                 'feats_x2_0': ret_dict0['feats_x2'],
                 'feats_x1_0': ret_dict0['feats_x1'],
+                'feats_x3_1': ret_dict1['feats_f'],
                 'feats_x2_1': ret_dict1['feats_x2'],
                 'feats_x1_1': ret_dict1['feats_x1'],
             })

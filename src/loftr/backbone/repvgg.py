@@ -163,7 +163,7 @@ class RepVGG(nn.Module):
         self.stage1 = self._make_stage(int(64 * width_multiplier[0]), num_blocks[0], stride=1)
         self.stage2 = self._make_stage(int(128 * width_multiplier[1]), num_blocks[1], stride=2)
         self.stage3 = self._make_stage(int(256 * width_multiplier[2]), num_blocks[2], stride=2)
-        self.stage4 = self._make_stage(int(256 * width_multiplier[3]), num_blocks[3], stride=2)
+        self.stage4 = self._make_stage(int(512 * width_multiplier[3]), num_blocks[3], stride=2)
         
     def _make_stage(self, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
